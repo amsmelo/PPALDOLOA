@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ppaldoloa-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-govtech}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-govtech_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-ppaldoloa_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-govtech} -d ${POSTGRES_DB:-ppaldoloa_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ppaldoloa-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_NAME: "GovTech - Gestão de Planejamento, Orçamento e Finanças (PPA/LDO/LOA)"
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEBUG: ${DEBUG:-true}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-govtech}:${POSTGRES_PASSWORD:-govtech_secret}@postgres:5432/${POSTGRES_DB:-ppaldoloa_db}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./app:/workspace/app
+      - ./alembic:/workspace/alembic
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+volumes:
+  postgres_data:
